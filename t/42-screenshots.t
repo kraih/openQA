@@ -25,7 +25,7 @@ use OpenQA::Task::Job::Limit;
 use OpenQA::Test::Utils qw(run_gru_job collect_coverage_of_gru_jobs);
 use Mojo::File 'path';
 use Mojo::Log;
-use Test::Output 'combined_like';
+use Test::Output qw(combined_like combined_unlike);
 use Test::MockModule;
 use Test::Mojo;
 use Test::Warnings ':report_warnings';
@@ -77,8 +77,8 @@ my %args = (
     max_screenshot_id     => $screenshots->search(undef, {rows => 1, order_by => {-desc => 'id'}})->first->id,
     screenshots_per_batch => OpenQA::Task::Job::Limit::DEFAULT_SCREENSHOTS_PER_BATCH,
 );
-combined_like { run_gru_job($app, limit_screenshots => \%args) }
-qr/removing screenshot bar/, 'removing screenshot logged';
+combined_unlike { run_gru_job($app, limit_screenshots => \%args) }
+qr/Can't remove/, 'removing screenshot logged';
 @screenshots     = $screenshots->search({id => {-in => \@screenshot_ids}})->search({}, {order_by => 'id'});
 @screenshot_data = map { {filename => $_->filename} } @screenshots;
 is_deeply(\@screenshot_data, [{filename => 'foo'}], 'foo still present (used in 99927), bar removed (no longer used)')
@@ -142,18 +142,18 @@ subtest 'limiting screenshots splitted into multiple Minion jobs' => sub {
     # the expected range
     my $worker = $minion->worker->register;
     my $args   = $enququed_minion_job_args->[1]->[0];
-    combined_like { $worker->dequeue(0, {id => $enququed_minion_job_ids->[1]})->perform }
-    qr/removing screenshot/, 'screenshots being removed';
+    combined_unlike { $worker->dequeue(0, {id => $enququed_minion_job_ids->[1]})->perform }
+    qr/Can't remove/, 'screenshots being removed';
     is($screenshots->search({id => {-between => [$args->{min_screenshot_id}, $args->{max_screenshot_id}]}})->count,
         0, 'all screenshots in the range deleted');
     is($screenshots->search({filename => {-like => 'test-%'}})->count,
         101, 'screenshots of other ranges not deleted yet');
 
     # perform remaining enqueued jobs
-    combined_like {
+    combined_unlike {
         $worker->dequeue(0, {id => $_})->perform for ($enququed_minion_job_ids->[0], $enququed_minion_job_ids->[2])
     }
-    qr/removing screenshot/, 'screenshots being removed';
+    qr/Can't remove/, 'screenshots being removed';
     $worker->unregister;
 
     my @remaining_screenshots = map { $_->filename } $screenshots->search(undef, {order_by => 'filename'});
